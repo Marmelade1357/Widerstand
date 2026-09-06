@@ -1,0 +1,17 @@
+{
+  "name": "der-widerstand-online",
+  "version": "1.0.0",
+  "description": "Der Widerstand (The Resistance) online spielen - mit Freunden im Browser, automatisch ausgeteilte Rollen und geheimer Spion-Erkennung.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=14"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  }
+}

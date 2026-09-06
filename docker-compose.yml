@@ -1,0 +1,14 @@
+name: widerstand
+
+services:
+  app:
+    build: .
+    environment:
+      - TZ=Europe/Berlin
+    ports:
+      # Nur intern auf dem Pi erreichbar (127.0.0.1:8092) - der bereits
+      # laufende Reverse Proxy auf dem Pi routet wd.oualid.de hierher.
+      # Port 8092 gewählt, weil 8080/8081/8090/8091/8443 schon von anderen
+      # Projekten (FinanceAgent, Monitoring Shop) belegt sind.
+      - "127.0.0.1:8092:3000"
+    restart: unless-stopped

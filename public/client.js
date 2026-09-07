@@ -12,10 +12,11 @@
   // (Hub-Startseite). Bei direktem Zugriff ohne Hub gibt es keine Spielauswahl,
   // zu der man zurückkehren könnte - dann bleibt der Link versteckt.
   if (MOUNT_PREFIX) {
-    document.querySelectorAll('#btn-back-hub-lobby, #btn-back-hub-game').forEach((a) => {
-      a.href = '/';
-      a.classList.remove('hidden');
-    });
+    const backHub = document.getElementById('btn-back-hub-home');
+    if (backHub) {
+      backHub.href = '/';
+      backHub.classList.remove('hidden');
+    }
   }
 
   const SESSION_KEY = 'widerstand_session';

@@ -122,6 +122,13 @@ input:focus { outline: 2px solid var(--red); }
   font-size: 0.9rem; padding: 0 4px; line-height: 1;
 }
 .remove-bot-btn:hover { color: var(--red-bright); }
+.remove-bot-btn.confirming {
+  color: white;
+  background: var(--red-bright);
+  border-radius: 6px;
+  padding: 1px 6px;
+  font-weight: 700;
+}
 
 .lobby-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
 .eyebrow { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); }
@@ -290,24 +297,6 @@ input:focus { outline: 2px solid var(--red); }
   .room-code.small { font-size: 0.95rem; padding: 3px 8px; }
   .btn.small { padding: 9px 12px; font-size: 0.85rem; }
   .plot-hand-badge { padding: 7px 12px; font-size: 0.9rem; }
-}
-
-@media (max-width: 640px) {
-  .card, .home-card { padding: 18px; }
-  .phase-panel { padding: 16px; min-height: 0; }
-  .phase-title { font-size: 1.1rem; }
-  .card-choice { flex-direction: column; }
-  .card-choice .btn { min-width: 0; }
-  .team-name-chip { font-size: 1.1rem; padding: 12px 16px; }
-  .btn.fail-card { padding: 22px 18px; font-size: 1.25em; }
-  .plot-hand-bar { flex-direction: column; align-items: stretch; gap: 4px; padding: 6px 10px 8px; max-height: 40vh; }
-  .plot-hand-bar-label { text-align: center; font-size: 0.78rem; }
-  .plot-hand-list { gap: 8px; }
-  .plot-card { min-width: 150px; max-width: 168px; padding: 7px 9px; }
-  .plot-card-name { font-size: 0.78rem; }
-  .plot-card-desc { font-size: 0.68rem; margin: 3px 0 6px; }
-  .plot-card .themed-select, .plot-card .btn { font-size: 0.8rem; padding: 7px 24px 7px 8px; }
-  #screen-game.has-plot-hand .game-body { padding-bottom: 145px; }
 }
 
 .reject-track-block {
@@ -549,17 +538,70 @@ input:focus { outline: 2px solid var(--red); }
   overflow-x: auto;
   flex: 1;
 }
-.plot-card {
+/* Plottkarten im Kartendesign: dezentes Wasserzeichen aus der Kartenrückseite
+   (card-back.png), abgerundete Ecken + Innenrahmen wie bei den Missions-
+   karten, plus eine kategorie-abhängige Akzentfarbe oben (immediate/
+   permanent/held), damit die Karten optisch zur Missions-Aufdeck-Animation
+   passen statt wie reine UI-Boxen zu wirken. */
+.plot-card,
+.plot-assign-box {
+  position: relative;
+  overflow: hidden;
   background: var(--bg-alt);
   border: 1px solid var(--border);
+  border-top-width: 3px;
+  border-radius: 14px;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+}
+.plot-card::before,
+.plot-assign-box::before {
+  content: '';
+  position: absolute;
+  inset: -15%;
+  background: url('cards/card-back.png') center/cover no-repeat;
+  opacity: 0.08;
+  filter: grayscale(0.4);
+  z-index: 0;
+  pointer-events: none;
+}
+.plot-card::after,
+.plot-assign-box::after {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border: 1px solid rgba(255,255,255,0.07);
   border-radius: 10px;
-  padding: 10px 12px;
+  z-index: 0;
+  pointer-events: none;
+}
+.plot-card > *, .plot-assign-box > * { position: relative; z-index: 1; }
+
+.plot-card--immediate { border-top-color: #4a90d9; }
+.plot-card--permanent { border-top-color: #8e44ad; }
+.plot-card--held { border-top-color: var(--gold); }
+
+.plot-card-icon-badge {
+  float: left;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.18);
+  font-size: 0.95rem;
+  margin: 0 8px 4px 0;
+}
+
+.plot-card {
+  padding: 12px 14px;
   min-width: 230px;
   max-width: 260px;
   flex-shrink: 0;
 }
-.plot-card-name { font-weight: 700; font-size: 0.9rem; display: flex; align-items: center; gap: 6px; }
-.plot-card-desc { color: var(--text-dim); font-size: 0.78rem; margin: 4px 0 8px; }
+.plot-card-name { font-weight: 700; font-size: 0.9rem; line-height: 26px; }
+.plot-card-desc { color: var(--text-dim); font-size: 0.78rem; margin: 4px 0 8px; clear: both; }
 .plot-card .themed-select {
   padding: 8px 30px 8px 8px;
   margin-bottom: 8px;
@@ -570,15 +612,43 @@ input:focus { outline: 2px solid var(--red); }
 .plot-card .btn { width: 100%; margin-top: 0; padding: 8px 10px; font-size: 0.85rem; }
 
 .plot-assign-box {
-  background: var(--bg-alt);
-  border: 1px solid var(--border);
-  border-radius: 10px;
   padding: 14px;
   margin-bottom: 14px;
 }
-.plot-assign-box .plot-card-name { font-size: 1.05rem; }
+.plot-assign-box .plot-card-icon-badge { width: 30px; height: 30px; font-size: 1.05rem; }
+.plot-assign-box .plot-card-name { font-size: 1.05rem; line-height: 30px; }
 .plot-deck-preview { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
 .plot-deck-chip {
   font-size: 0.78rem; padding: 4px 9px; border-radius: 20px;
   background: var(--border); color: var(--text-dim);
+}
+
+/* Dieser Mobil-Block steht bewusst ganz am Ende der Datei: einige seiner
+   Selektoren (.phase-panel, .team-name-chip, .plot-card, ...) haben
+   dieselbe Spezifität wie ihre "normalen" Regeln weiter oben, und bei
+   gleicher Spezifität gewinnt in CSS die später im Dokument stehende Regel
+   - unabhängig davon, ob sie in einer @media-Regel steht. Stünde dieser
+   Block vor den Basis-Regeln (wie es hier historisch der Fall war), würden
+   die Mobil-Werte auf echten schmalen Bildschirmen also einfach von den
+   späteren Basis-Regeln überschrieben werden. Neue Basis-Regeln für
+   Elemente, die hier drin vorkommen, gehören deshalb immer VOR diesen
+   Block - oder ihre Mobil-Overrides hier müssen mit doppelten Klassen
+   (z.B. .plot-card.plot-card) zusätzlich abgesichert werden. */
+@media (max-width: 640px) {
+  .card, .home-card { padding: 18px; }
+  .phase-panel { padding: 16px; min-height: 0; }
+  .phase-title { font-size: 1.1rem; }
+  .card-choice { flex-direction: column; }
+  .card-choice .btn { min-width: 0; }
+  .team-name-chip { font-size: 1.1rem; padding: 12px 16px; }
+  .btn.fail-card { padding: 22px 18px; font-size: 1.25em; }
+  .plot-hand-bar { flex-direction: column; align-items: stretch; gap: 4px; padding: 6px 10px 8px; max-height: 40vh; }
+  .plot-hand-bar-label { text-align: center; font-size: 0.78rem; }
+  .plot-hand-list { gap: 8px; }
+  .plot-card { min-width: 150px; max-width: 168px; padding: 7px 9px; }
+  .plot-card-name { font-size: 0.78rem; line-height: 22px; }
+  .plot-card-desc { font-size: 0.68rem; margin: 3px 0 6px; }
+  .plot-card-icon-badge { width: 22px; height: 22px; font-size: 0.8rem; }
+  .plot-card .themed-select, .plot-card .btn { font-size: 0.8rem; padding: 7px 24px 7px 8px; }
+  #screen-game.has-plot-hand .game-body { padding-bottom: 145px; }
 }

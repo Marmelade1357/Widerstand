@@ -4,7 +4,8 @@
   "description": "Der Widerstand (The Resistance) online spielen - mit Freunden im Browser, automatisch ausgeteilte Rollen und geheimer Spion-Erkennung.",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node tests/run.js"
   },
   "engines": {
     "node": ">=14"
@@ -13,5 +14,8 @@
   "dependencies": {
     "express": "^4.19.2",
     "socket.io": "^4.7.5"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.7.5"
   }
 }

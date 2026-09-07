@@ -246,6 +246,36 @@
   // Lobby
   // ---------------------------------------------------------------------
 
+  // Entfernen-Button mit Zwei-Klick-Bestätigung (kein natives confirm()-Popup):
+  // erster Klick versetzt den Button für ein paar Sekunden in einen
+  // "Sicher?"-Zustand, erst der zweite Klick innerhalb dieses Fensters
+  // entfernt den Spieler wirklich. Ohne Bestätigung setzt sich der Button
+  // von selbst zurück.
+  function makeRemovePlayerButton(p) {
+    const label = p.isBot ? 'Bot' : 'Spieler';
+    const btn = el('button', { class: 'remove-bot-btn', text: '✕', title: `${label} entfernen` });
+    let confirmTimer = null;
+    const reset = () => {
+      clearTimeout(confirmTimer);
+      confirmTimer = null;
+      btn.classList.remove('confirming');
+      btn.textContent = '✕';
+      btn.title = `${label} entfernen`;
+    };
+    btn.addEventListener('click', () => {
+      if (confirmTimer) {
+        reset();
+        socket.emit('kickPlayer', { playerId: p.id });
+        return;
+      }
+      btn.classList.add('confirming');
+      btn.textContent = '✓';
+      btn.title = `Wirklich ${label.toLowerCase()}en entfernen? Nochmal klicken zum Bestätigen.`;
+      confirmTimer = setTimeout(reset, 3000);
+    });
+    return btn;
+  }
+
   function renderLobby(state) {
     $('lobby-code').textContent = state.code;
     $('lobby-count').textContent = state.players.length;
@@ -260,10 +290,8 @@
       if (p.isHost) tags.push(el('span', { class: 'tag host', text: 'Host' }));
       if (p.id === myId()) tags.push(el('span', { class: 'tag', text: 'Ich' }));
       if (!p.isBot && !p.connected) tags.push(el('span', { class: 'tag', text: 'offline' }));
-      if (p.isBot && isHost) {
-        const removeBtn = el('button', { class: 'remove-bot-btn', text: '✕', title: 'Bot entfernen' });
-        removeBtn.addEventListener('click', () => socket.emit('kickPlayer', { playerId: p.id }));
-        tags.push(removeBtn);
+      if (isHost && p.id !== myId()) {
+        tags.push(makeRemovePlayerButton(p));
       }
       const li = el('li', { class: (!p.isBot && !p.connected) ? 'disconnected' : '' }, [
         el('span', { class: 'player-name', text: (p.isBot ? '🤖 ' : '') + p.name }),
@@ -566,9 +594,10 @@
     list.innerHTML = '';
 
     myPlotHand.forEach((cardId) => {
-      const info = PLOT_CARD_CATALOG[cardId] || { name: cardId, icon: '🃏', desc: '' };
-      const box = el('div', { class: 'plot-card' });
-      box.appendChild(el('div', { class: 'plot-card-name', text: `${info.icon} ${info.name}` }));
+      const info = PLOT_CARD_CATALOG[cardId] || { name: cardId, icon: '🃏', desc: '', category: 'held' };
+      const box = el('div', { class: `plot-card plot-card--${info.category || 'held'}` });
+      box.appendChild(el('div', { class: 'plot-card-icon-badge', text: info.icon }));
+      box.appendChild(el('div', { class: 'plot-card-name', text: info.name }));
       box.appendChild(el('div', { class: 'plot-card-desc', text: info.desc }));
 
       const usableNote = (msg) => box.appendChild(el('div', { class: 'muted-note', text: msg }));
@@ -662,8 +691,9 @@
 
         if (plot.distributingLeaderId === myId()) {
           const card = plot.pending[0];
-          const box = el('div', { class: 'plot-assign-box' });
-          box.appendChild(el('div', { class: 'plot-card-name', text: `${card.icon} ${card.name}` }));
+          const box = el('div', { class: `plot-assign-box plot-card--${card.category || 'held'}` });
+          box.appendChild(el('div', { class: 'plot-card-icon-badge', text: card.icon }));
+          box.appendChild(el('div', { class: 'plot-card-name', text: card.name }));
           box.appendChild(el('div', { class: 'plot-card-desc', text: card.desc }));
           const candidates = otherConnectedPlayers(state, myId());
           const select = playerSelect(candidates);
@@ -680,8 +710,9 @@
       const myResolve = plot.resolveQueue.find((r) => r.actorId === myId());
       if (myResolve) {
         const card = myResolve.card;
-        const box = el('div', { class: 'plot-assign-box' });
-        box.appendChild(el('div', { class: 'plot-card-name', text: `${card.icon} ${card.name}` }));
+        const box = el('div', { class: `plot-assign-box plot-card--${card.category || 'held'}` });
+        box.appendChild(el('div', { class: 'plot-card-icon-badge', text: card.icon }));
+        box.appendChild(el('div', { class: 'plot-card-name', text: card.name }));
         box.appendChild(el('div', { class: 'plot-card-desc', text: card.desc }));
         box.appendChild(el('p', { text: 'Wähle einen Spieler:' }));
         const candidates = otherConnectedPlayers(state, myId());
@@ -781,7 +812,7 @@
       } else if (onTeam && alreadyPlayed) {
         content.appendChild(el('p', { class: 'muted-note', text: `Karte gespielt. Warte auf die anderen (${state.missionCardsSubmitted.length}/${state.teamProposal.length}).` }));
       } else {
-        content.appendChild(el('p', { class: 'muted-note', text: 'Das Team führt die Mission verdeckt durch. Warte auf das Ergebnis …' }));
+        content.appendChild(el('p', { class: 'muted-note', text: `Das Team führt die Mission verdeckt durch (${state.missionCardsSubmitted.length}/${state.teamProposal.length} Karten gespielt). Warte auf das Ergebnis …` }));
       }
       return;
     }
@@ -886,6 +917,64 @@
     return a;
   }
 
+  // ---------------------------------------------------------------------
+  // Sound & Vibration - kleine Verstärkung für den dramatischen Reveal-
+  // Moment. Rein synthetisch per Web Audio API erzeugt (keine Audio-Dateien
+  // nötig) und mit navigator.vibrate() kombiniert. Beides ist rein additiv:
+  // wenn der Browser/das Gerät etwas davon nicht unterstützt oder blockiert
+  // (z.B. Autoplay-Policy vor der ersten Nutzerinteraktion), wird es einfach
+  // übersprungen - die eigentliche Spiellogik hängt nie davon ab.
+  let audioCtx = null;
+  function getAudioCtx() {
+    if (audioCtx) return audioCtx;
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (Ctx) audioCtx = new Ctx();
+    } catch (e) { audioCtx = null; }
+    return audioCtx;
+  }
+
+  function playTone({ freq, duration = 150, type = 'sine', volume = 0.15, delay = 0 }) {
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    try {
+      const startTime = ctx.currentTime + delay / 1000;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, startTime);
+      gain.gain.setValueAtTime(volume, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration / 1000);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(startTime);
+      osc.stop(startTime + duration / 1000 + 0.02);
+    } catch (e) { /* Audio ist rein kosmetisch - Fehler einfach ignorieren */ }
+  }
+
+  function playFlipTick() {
+    playTone({ freq: 520, duration: 90, type: 'triangle', volume: 0.1 });
+  }
+
+  function playResultSound(success) {
+    if (success) {
+      // Kurzer, freundlicher Dreiklang aufwärts.
+      playTone({ freq: 523.25, duration: 160, type: 'sine', volume: 0.18, delay: 0 });
+      playTone({ freq: 659.25, duration: 160, type: 'sine', volume: 0.18, delay: 130 });
+      playTone({ freq: 783.99, duration: 280, type: 'sine', volume: 0.2, delay: 260 });
+    } else {
+      // Tiefer, kurzer "Buzzer"-Ton abwärts.
+      playTone({ freq: 196, duration: 260, type: 'sawtooth', volume: 0.16, delay: 0 });
+      playTone({ freq: 146.83, duration: 380, type: 'sawtooth', volume: 0.18, delay: 200 });
+    }
+  }
+
+  function vibrate(pattern) {
+    if (navigator.vibrate) {
+      try { navigator.vibrate(pattern); } catch (e) { /* Vibration ist optional */ }
+    }
+  }
+
   let missionRevealCloseTimer = null;
 
   function closeMissionRevealModal() {
@@ -937,7 +1026,11 @@
       const card = el('div', { class: 'mission-card' }, [inner]);
       cardsRow.appendChild(card);
       const delay = FIRST_DELAY + i * STAGGER;
-      setTimeout(() => card.classList.add('flipped'), delay);
+      setTimeout(() => {
+        card.classList.add('flipped');
+        playFlipTick();
+        vibrate(25);
+      }, delay);
       lastCardStart = delay;
     });
 
@@ -954,7 +1047,11 @@
     show(modal);
 
     const textDelay = lastCardStart + FLIP_DURATION + 300;
-    setTimeout(() => textEl.classList.add('visible'), textDelay);
+    setTimeout(() => {
+      textEl.classList.add('visible');
+      playResultSound(data.result === 'success');
+      vibrate(data.result === 'success' ? [40, 60, 40, 60, 80] : [200, 100, 200]);
+    }, textDelay);
 
     // Schließt sich automatisch 3 Sekunden, nachdem die letzte Karte
     // aufgedeckt wurde - lässt sich nicht wegklicken (siehe oben).

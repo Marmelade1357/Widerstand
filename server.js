@@ -132,6 +132,7 @@ function drawPlotCards(room, count) {
 
 const MIN_PLAYERS = 5;
 const MAX_PLAYERS = 10;
+const MAX_ROOMS = 500; // Sicherheitsventil gegen Speicher-Erschöpfung durch Missbrauch
 const ROOM_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // ohne verwechselbare Zeichen
 
 function makeRoomCode() {
@@ -157,6 +158,46 @@ function shuffle(arr) {
   }
   return a;
 }
+
+// ---------------------------------------------------------------------------
+// Einfaches Rate-Limiting (Schutz vor Missbrauch, da öffentlich erreichbar)
+// ---------------------------------------------------------------------------
+
+// Ermittelt die tatsächliche Client-IP - berücksichtigt X-Forwarded-For, falls
+// der Server (wie auf dem Pi) hinter einem Reverse Proxy läuft.
+function getClientIp(socket) {
+  const forwarded = socket.handshake.headers['x-forwarded-for'];
+  if (forwarded) return forwarded.split(',')[0].trim();
+  return socket.handshake.address || 'unknown';
+}
+
+// Sliding-Window Rate-Limiter: erlaubt maximal `limit` Aufrufe pro `windowMs`
+// und Schlüssel (z.B. "createRoom:1.2.3.4"). Alte Einträge werden bei jedem
+// Aufruf verworfen, damit die Map nicht unbegrenzt wächst.
+const rateLimitHits = new Map(); // key -> Array<timestamp>
+
+function isRateLimited(key, limit, windowMs) {
+  const now = Date.now();
+  const hits = (rateLimitHits.get(key) || []).filter((t) => now - t < windowMs);
+  if (hits.length >= limit) {
+    rateLimitHits.set(key, hits);
+    return true;
+  }
+  hits.push(now);
+  rateLimitHits.set(key, hits);
+  return false;
+}
+
+// Räumt alte Rate-Limit-Einträge regelmäßig auf, damit der Speicher nicht
+// über Tage/Wochen hinweg unbegrenzt wächst.
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, hits] of rateLimitHits) {
+    const fresh = hits.filter((t) => now - t < 10 * 60 * 1000);
+    if (fresh.length) rateLimitHits.set(key, fresh);
+    else rateLimitHits.delete(key);
+  }
+}, 10 * 60 * 1000).unref();
 
 // ---------------------------------------------------------------------------
 // Raumverwaltung
@@ -886,6 +927,12 @@ function handlePlayCard(room, playerId, card) {
 io.on('connection', (socket) => {
   socket.on('createRoom', ({ name }, cb) => {
     try {
+      if (isRateLimited(`createRoom:${getClientIp(socket)}`, 8, 60 * 1000)) {
+        return cb({ ok: false, error: 'Zu viele neue Räume in kurzer Zeit. Bitte kurz warten und erneut versuchen.' });
+      }
+      if (rooms.size >= MAX_ROOMS) {
+        return cb({ ok: false, error: 'Gerade sind zu viele Räume aktiv. Bitte versuche es in ein paar Minuten erneut.' });
+      }
       name = (name || '').trim().slice(0, 20) || 'Spieler';
       const room = createRoom();
       const player = {
@@ -910,6 +957,9 @@ io.on('connection', (socket) => {
   });
 
   socket.on('joinRoom', ({ code, name, token }, cb) => {
+    if (isRateLimited(`joinRoom:${getClientIp(socket)}`, 20, 60 * 1000)) {
+      return cb({ ok: false, error: 'Zu viele Versuche in kurzer Zeit. Bitte kurz warten und erneut versuchen.' });
+    }
     code = (code || '').trim().toUpperCase();
     const room = rooms.get(code);
     if (!room) return cb({ ok: false, error: 'Diesen Raum gibt es nicht.' });

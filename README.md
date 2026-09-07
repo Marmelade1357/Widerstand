@@ -58,6 +58,8 @@ Widerstand/
 │   ├── index.html         Oberfläche
 │   ├── style.css          Design
 │   └── client.js          Spiellogik im Browser
+├── tests/               Automatisierte Integrationstests (siehe unten)
+├── .github/workflows/   GitHub-Actions-CI, läuft bei jedem Push automatisch
 └── README.md            Diese Anleitung
 ```
 
@@ -74,6 +76,24 @@ npm start
 Danach im Browser öffnen: `http://localhost:3000`
 
 Zum Testen mit mehreren "Spielern" einfach mehrere Browser-Tabs oder -Fenster öffnen.
+
+## Automatisierte Tests
+
+Unter `tests/` liegen ein paar Integrationstests, die den Server als echten
+Prozess starten und über `socket.io-client` komplette Spiele mit Bots
+durchspielen (Grundablauf, sowie Kommandant- und Plottkarten-Variante
+zusammen). Sie prüfen vor allem, dass der Server dabei nicht abstürzt und am
+Ende ein in sich stimmiges Ergebnis steht (z. B. dass ein korrekter
+Kommandant-Tipp den Sieg auch wirklich umdreht).
+
+```bash
+npm install
+npm test
+```
+
+Ein Testlauf spielt dabei echte, vollständige Partien durch - das dauert
+insgesamt ein bis zwei Minuten. Bei jedem Push nach GitHub läuft das
+automatisch über eine GitHub Action (`.github/workflows/ci.yml`) mit.
 
 ## Mit Freunden im selben WLAN spielen
 

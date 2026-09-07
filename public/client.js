@@ -1,5 +1,11 @@
 (function () {
-  const socket = io();
+  // Ermittelt automatisch, unter welchem Pfad-Praefix diese Seite gerade laeuft
+  // (z.B. "" bei direktem Zugriff auf diesen Server, "/widerstand" wenn sie ueber
+  // einen gemeinsamen Reverse-Proxy/Hub unter einem Unterpfad eingebunden ist).
+  // Damit trifft Socket.IO immer den richtigen Endpunkt, unabhaengig davon, ob
+  // der Server direkt oder ueber den Hub erreicht wird.
+  const MOUNT_PREFIX = window.location.pathname.replace(/\/[^/]*$/, '');
+  const socket = io({ path: MOUNT_PREFIX + '/socket.io/' });
 
   const SESSION_KEY = 'widerstand_session';
   const MUTE_KEY = 'widerstand_muted';

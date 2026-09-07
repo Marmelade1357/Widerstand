@@ -49,7 +49,10 @@
         <div class="eyebrow">Raum-Code – an Freunde weitergeben</div>
         <div id="lobby-code" class="room-code">----</div>
       </div>
-      <button id="btn-leave-lobby" class="btn ghost small">Verlassen</button>
+      <div class="header-actions">
+        <a id="btn-back-hub-lobby" class="btn ghost small hidden" href="/">← Spielauswahl</a>
+        <button id="btn-leave-lobby" class="btn ghost small">Verlassen</button>
+      </div>
     </div>
 
     <h3>Spieler (<span id="lobby-count">0</span>/10)</h3>
@@ -105,6 +108,7 @@
       </div>
       <div class="game-header-right">
         <button id="btn-mute" class="btn ghost small" title="Ton stummschalten">🔊</button>
+        <a id="btn-back-hub-game" class="btn ghost small hidden" href="/">← Spielauswahl</a>
         <button id="btn-leave-game" class="btn ghost small">Verlassen</button>
       </div>
     </div>

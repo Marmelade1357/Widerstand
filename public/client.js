@@ -2,6 +2,7 @@
   const socket = io();
 
   const SESSION_KEY = 'widerstand_session';
+  const MUTE_KEY = 'widerstand_muted';
 
   let session = null; // { code, playerId, token, name }
   let myRole = null; // { role, spies }
@@ -924,6 +925,27 @@
   // wenn der Browser/das Gerät etwas davon nicht unterstützt oder blockiert
   // (z.B. Autoplay-Policy vor der ersten Nutzerinteraktion), wird es einfach
   // übersprungen - die eigentliche Spiellogik hängt nie davon ab.
+  let soundMuted = false;
+  try { soundMuted = localStorage.getItem(MUTE_KEY) === '1'; } catch (e) { soundMuted = false; }
+
+  function updateMuteButton() {
+    [$('btn-mute')].forEach((btn) => {
+      if (!btn) return;
+      btn.textContent = soundMuted ? '🔇' : '🔊';
+      btn.title = soundMuted ? 'Ton einschalten' : 'Ton stummschalten';
+    });
+  }
+
+  const muteBtn = $('btn-mute');
+  if (muteBtn) {
+    muteBtn.addEventListener('click', () => {
+      soundMuted = !soundMuted;
+      try { localStorage.setItem(MUTE_KEY, soundMuted ? '1' : '0'); } catch (e) { /* localStorage optional */ }
+      updateMuteButton();
+    });
+    updateMuteButton();
+  }
+
   let audioCtx = null;
   function getAudioCtx() {
     if (audioCtx) return audioCtx;
@@ -935,6 +957,7 @@
   }
 
   function playTone({ freq, duration = 150, type = 'sine', volume = 0.15, delay = 0 }) {
+    if (soundMuted) return;
     const ctx = getAudioCtx();
     if (!ctx) return;
     if (ctx.state === 'suspended') ctx.resume().catch(() => {});

@@ -123,16 +123,22 @@ input:focus { outline: 2px solid var(--red); }
 .bot-controls { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 10px; }
 .bot-controls .btn { width: auto; margin-top: 0; }
 .remove-bot-btn {
-  border: none; background: transparent; color: var(--text-dim); cursor: pointer;
-  font-size: 0.9rem; padding: 0 4px; line-height: 1;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  border-radius: 8px;
+  width: 26px;
+  height: 26px;
+  cursor: pointer;
 }
-.remove-bot-btn:hover { color: var(--red-bright); }
-.remove-bot-btn.confirming {
-  color: white;
+.remove-bot-btn.confirm {
   background: var(--red-bright);
-  border-radius: 6px;
-  padding: 1px 6px;
-  font-weight: 700;
+  color: white;
+  border-color: var(--red-bright);
+  width: auto;
+  padding: 0 10px;
+  font-size: 0.8rem;
+  white-space: nowrap;
 }
 
 .lobby-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }

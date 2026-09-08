@@ -274,23 +274,16 @@
     const label = p.isBot ? 'Bot' : 'Spieler';
     const btn = el('button', { class: 'remove-bot-btn', text: '✕', title: `${label} entfernen` });
     let confirmTimer = null;
-    const reset = () => {
-      clearTimeout(confirmTimer);
-      confirmTimer = null;
-      btn.classList.remove('confirming');
-      btn.textContent = '✕';
-      btn.title = `${label} entfernen`;
-    };
+    const reset = () => { clearTimeout(confirmTimer); btn.classList.remove('confirm'); btn.textContent = '✕'; };
     btn.addEventListener('click', () => {
-      if (confirmTimer) {
-        reset();
-        socket.emit('kickPlayer', { playerId: p.id });
+      if (!btn.classList.contains('confirm')) {
+        btn.classList.add('confirm');
+        btn.textContent = 'Sicher?';
+        confirmTimer = setTimeout(reset, 3000);
         return;
       }
-      btn.classList.add('confirming');
-      btn.textContent = '✓';
-      btn.title = `Wirklich ${label.toLowerCase()}en entfernen? Nochmal klicken zum Bestätigen.`;
-      confirmTimer = setTimeout(reset, 3000);
+      reset();
+      socket.emit('kickPlayer', { playerId: p.id });
     });
     return btn;
   }

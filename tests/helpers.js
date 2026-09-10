@@ -10,10 +10,10 @@ const { spawn } = require('child_process');
 const path = require('path');
 const { io } = require('socket.io-client');
 
-function startServer(port) {
+function startServer(port, extraEnv) {
   return new Promise((resolve, reject) => {
     const proc = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
-      env: Object.assign({}, process.env, { PORT: String(port) }),
+      env: Object.assign({}, process.env, { PORT: String(port) }, extraEnv || {}),
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let started = false;

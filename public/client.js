@@ -57,6 +57,45 @@
   function showScreen(id) {
     document.querySelectorAll('.screen').forEach((s) => hide(s));
     show($(id));
+    if (id === 'screen-home') releaseWakeLock(); else requestWakeLock();
+  }
+
+  // ---------------------------------------------------------------------
+  // Screen Wake Lock - verhindert, dass sich das Handy während des Spiels
+  // von selbst abschaltet/sperrt. Rein additiv: fehlt die API oder wird die
+  // Anfrage abgelehnt (z.B. Tab im Hintergrund), passiert einfach nichts.
+  // ---------------------------------------------------------------------
+  let wakeLock = null;
+  async function requestWakeLock() {
+    if (!('wakeLock' in navigator)) return;
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+    } catch (e) { /* z.B. Tab nicht sichtbar oder nicht unterstützt - ignorieren */ }
+  }
+  function releaseWakeLock() {
+    if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+  }
+  document.addEventListener('visibilitychange', () => {
+    const homeScreen = document.getElementById('screen-home');
+    const onHomeScreen = homeScreen && !homeScreen.classList.contains('hidden');
+    if (document.visibilityState === 'visible' && !onHomeScreen) requestWakeLock();
+  });
+
+  // Zwei-Klick-Bestätigung, analog zum bestehenden "Bot/Spieler entfernen"-
+  // Muster - verhindert, dass ein Fehltipp auf "Verlassen" sofort den
+  // eigenen Platz aufgibt (nicht per Reconnect rückgängig zu machen).
+  function attachConfirmClick(btn, onConfirm) {
+    if (!btn) return;
+    const originalText = btn.textContent;
+    let confirmTimer = null;
+    const reset = () => { clearTimeout(confirmTimer); confirmTimer = null; btn.classList.remove('danger'); btn.textContent = originalText; };
+    btn.addEventListener('click', () => {
+      if (confirmTimer) { reset(); onConfirm(); return; }
+      btn.classList.add('danger');
+      btn.textContent = 'Sicher?';
+      confirmTimer = setTimeout(reset, 3000);
+    });
   }
 
   let toastTimer = null;
@@ -135,7 +174,7 @@
     });
   });
 
-  $('btn-leave-lobby').addEventListener('click', () => {
+  attachConfirmClick($('btn-leave-lobby'), () => {
     socket.emit('leaveRoom');
     clearSession();
     showScreen('screen-home');
@@ -154,6 +193,11 @@
     socket.emit('setCommanderEnabled', { enabled: e.target.checked });
   });
 
+  $('afk-toggle-checkbox').addEventListener('change', (e) => {
+    if (!latestState || latestState.hostId !== myId()) { e.target.checked = latestState ? latestState.afkTimeoutEnabled !== false : e.target.checked; return; }
+    socket.emit('setAfkTimeoutEnabled', { enabled: e.target.checked });
+  });
+
   $('btn-start').addEventListener('click', () => {
     socket.emit('startGame');
   });
@@ -168,7 +212,7 @@
   $('btn-close-role-modal').addEventListener('click', () => hide($('role-modal')));
   $('btn-close-plot-modal').addEventListener('click', () => hide($('plot-info-modal')));
 
-  $('btn-leave-game').addEventListener('click', () => {
+  attachConfirmClick($('btn-leave-game'), () => {
     socket.emit('leaveRoom');
     clearSession();
     latestState = null;
@@ -203,8 +247,25 @@
     if (latestState && latestState.phase === 'roles') renderRoleScreen();
   });
 
+  // Kurzer Ton+Vibration, sobald man selbst Team-Chef wird - das ist der
+  // einzige Moment im Widerstand, in dem wirklich EINE Person allein aktiv
+  // werden muss (Abstimmung/Mission laufen für alle gleichzeitig). Nutzt
+  // dieselbe Sound-/Vibrations-Infrastruktur wie der Missions-Reveal weiter
+  // unten (inkl. Stummschaltung über btn-mute).
+  let notifiedLeaderKey = null;
+  function maybeNotifyMyTurn(state) {
+    if (state.phase !== 'team' || state.leaderId !== myId()) return;
+    const key = `${state.code}:${state.missionNumber}:${state.leaderId}:${state.voteRound}`;
+    if (key === notifiedLeaderKey) return;
+    notifiedLeaderKey = key;
+    playTone({ freq: 660, duration: 100, type: 'sine', volume: 0.14 });
+    playTone({ freq: 880, duration: 120, type: 'sine', volume: 0.14, delay: 100 });
+    vibrate(120);
+  }
+
   socket.on('gameState', (state) => {
     latestState = state;
+    maybeNotifyMyTurn(state);
     render(state);
   });
 
@@ -374,6 +435,24 @@
         ? 'Kommandant-Variante ist aktiv (vom Host festgelegt).'
         : 'Kommandant-Variante ist deaktiviert (vom Host festgelegt).';
       show(cmdToggleNote);
+    }
+
+    const afkToggleRow = $('afk-toggle-row');
+    const afkToggleCheckbox = $('afk-toggle-checkbox');
+    const afkToggleNote = $('afk-toggle-note');
+    const afkEnabled = state.afkTimeoutEnabled !== false;
+    afkToggleCheckbox.checked = afkEnabled;
+    if (isHost) {
+      afkToggleCheckbox.disabled = false;
+      afkToggleRow.classList.remove('disabled');
+      hide(afkToggleNote);
+    } else {
+      afkToggleCheckbox.disabled = true;
+      afkToggleRow.classList.add('disabled');
+      afkToggleNote.textContent = afkEnabled
+        ? 'AFK-Timeout ist aktiv (vom Host festgelegt).'
+        : 'AFK-Timeout ist deaktiviert (vom Host festgelegt).';
+      show(afkToggleNote);
     }
 
     const cardList = $('plot-card-list');

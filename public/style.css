@@ -663,3 +663,14 @@ input:focus { outline: 2px solid var(--red); }
   .plot-card .themed-select, .plot-card .btn { font-size: 0.8rem; padding: 7px 24px 7px 8px; }
   #screen-game.has-plot-hand .game-body { padding-bottom: 145px; }
 }
+
+/* --- Warte-Hinweis (Host kann überspringen) --- */
+.wait-banner{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin:6px auto;padding:8px 12px;max-width:640px;border-radius:10px;background:rgba(255,190,60,.16);border:1px solid rgba(255,190,60,.5);color:inherit;font-size:.92rem;text-align:center}
+.wait-banner.hidden{display:none}
+#btn-share-link{margin-top:6px}
+
+/* --- Regeln-Dialog --- */
+.rules-btn { width: 100%; margin-top: 10px; }
+.rules-modal-content { max-width: 640px; max-height: 86vh; overflow: auto; position: relative; }
+.rules-text h3 { color: var(--gold-bright, #ffdd88); margin-top: 16px; }
+.rules-text p { line-height: 1.5; }

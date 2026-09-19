@@ -254,9 +254,6 @@ function createRoom() {
     commanderId: null, // playerId eines Widerstandsmitglieds, das die Spione kennt
     commanderGuessedId: null,
     commanderGuessedBy: null,
-    // AFK-Timeout für verbundene, aber untätige Team-Chefs/Abstimmende/Mission-
-    // Mitglieder - in der Lobby vom Host aktivierbar/deaktivierbar.
-    afkTimeoutEnabled: true,
   };
   rooms.set(code, room);
   touchRoom(room);
@@ -324,7 +321,7 @@ function publicState(room) {
     missionResults: room.missionResults,
     rejectCount: room.rejectCount,
     winner: room.winner,
-    afkTimeoutEnabled: room.afkTimeoutEnabled,
+    waiting: waitInfo(room),
     plotCardsEnabled: room.plotCardsEnabled,
     plotCardConfig: room.plotCardConfig,
     commanderEnabled: room.commanderEnabled,
@@ -656,15 +653,67 @@ function randomDelay(min = 1300, max = 2800) {
   return min + Math.random() * (max - min);
 }
 
-// AFK-Timeout für verbundene, aber untätige Menschen (z. B. gesperrtes Handy)
-// bei Team-Vorschlag, Abstimmung und Missions-Karte - per Lobby-Einstellung
-// abschaltbar (room.afkTimeoutEnabled), über eine Umgebungsvariable
-// konfigurierbar, damit Tests nicht wirklich 60s warten müssen. Bewusst NICHT
-// auf die Plottkarten- und Kommandant-Enttarnen-Phasen angewendet: Ersteres
-// ist selten und Letzteres entscheidet sofort und unwiderruflich das ganze
-// Spiel - beides eher etwas für Bots als für einen automatischen Zug im
-// Namen einer abwesenden echten Person.
-const AFK_TIMEOUT_MS = Number(process.env.AFK_TIMEOUT_MS) || 60000;
+// Wartezeit, bevor der Host verbundene, aber untätige Menschen überspringen
+// darf; Übergabe der Host-Rolle bei getrenntem Host (per Env änderbar).
+const SKIP_MIN_WAIT_MS = Number(process.env.SKIP_MIN_WAIT_MS) || 20000;
+const HOST_HANDOVER_MS = Number(process.env.HOST_HANDOVER_MS) || 20000;
+
+function waitingFor(room) {
+  let ids = []; let key = null;
+  if (room.phase === 'team') {
+    const l = activeLeader(room);
+    if (l) ids = [l.id];
+    key = `t|${room.missionNumber}|${room.rejectCount}`;
+  } else if (room.phase === 'voting') {
+    ids = room.players.filter((p) => room.votes[p.id] === undefined).map((p) => p.id);
+    key = `v|${room.voteRound}`;
+  } else if (room.phase === 'mission') {
+    ids = room.teamProposal.filter((id) => room.missionCards[id] === undefined);
+    key = `m|${room.missionRound}`;
+  }
+  ids = ids.filter((id) => { const p = findPlayer(room, id); return p && !p.isBot && p.connected; });
+  if (!ids.length) return null;
+  return { ids, key };
+}
+
+function waitInfo(room) {
+  const w = waitingFor(room);
+  if (!w) { room._wait = null; return null; }
+  if (!room._wait || room._wait.key !== w.key) room._wait = { key: w.key, since: Date.now() };
+  return { ids: w.ids, elapsedMs: Date.now() - room._wait.since };
+}
+
+function ensureHost(room) {
+  const host = findPlayer(room, room.hostId);
+  if (host && !host.isBot && host.connected) return false;
+  const next = room.players.find((p) => !p.isBot && p.connected);
+  if (!next) return false;
+  room.hostId = next.id;
+  log(room, `${next.name} ist jetzt Host.`);
+  return true;
+}
+
+function scheduleHostHandover(room) {
+  if (room.hostTimer) clearTimeout(room.hostTimer);
+  room.hostTimer = setTimeout(() => {
+    room.hostTimer = null;
+    if (rooms.has(room.code) && ensureHost(room)) { touchRoom(room); broadcastState(room); }
+  }, HOST_HANDOVER_MS);
+}
+
+// Sicherer Standardzug für abwesende echte Personen (getrennt oder vom Host
+// übersprungen): zufälliges Team, Zustimmung, IMMER "Erfolg" - der Server
+// sabotiert oder verdächtigt nie im Namen einer echten Person.
+function autoActFor(room, p) {
+  if (room.phase === 'team') {
+    const l = activeLeader(room);
+    if (l && l.id === p.id) handleProposeTeam(room, p.id, pickRandomTeam(room, room.missionSizes[room.missionNumber - 1]));
+  } else if (room.phase === 'voting') {
+    if (room.votes[p.id] === undefined) handleVote(room, p.id, true);
+  } else if (room.phase === 'mission') {
+    if (room.missionCards[p.id] === undefined && room.teamProposal.includes(p.id)) handlePlayCard(room, p.id, 'success');
+  }
+}
 
 function pickRandomTeam(room, size) {
   return shuffle(room.players.map((p) => p.id)).slice(0, size);
@@ -730,42 +779,28 @@ function scheduleBotTurnIfNeeded(room) {
   } else if (room.phase === 'team') {
     const leader = activeLeader(room);
     if (!leader) return;
-    const isConnectedHuman = !leader.isBot && leader.connected;
-    // Ein verbundener Mensch als Team-Chef bekommt nur dann einen Auto-Zug-
-    // Timer, wenn der Host das AFK-Timeout nicht abgeschaltet hat - eine
-    // getrennte Person oder ein Bot darf dagegen nie dauerhaft blockieren.
-    if (isConnectedHuman && !room.afkTimeoutEnabled) return;
+    if (!leader.isBot && leader.connected) return; // Host kann überspringen
     const missionNumber = room.missionNumber;
     const rejectCount = room.rejectCount;
-    const delay = isConnectedHuman ? AFK_TIMEOUT_MS : randomDelay();
     setTimeout(() => {
       if (!rooms.has(room.code)) return;
       if (room.phase !== 'team') return;
       if (room.missionNumber !== missionNumber || room.rejectCount !== rejectCount) return;
       const currentLead = activeLeader(room);
       if (!currentLead || currentLead.id !== leader.id) return;
-      // Sowohl für Bots als auch für abwesende/untätige Menschen: ein
-      // zufälliges Team - niemand wird bevorzugt oder verdächtigt.
-      const size = room.missionSizes[room.missionNumber - 1];
-      const memberIds = pickRandomTeam(room, size);
-      handleProposeTeam(room, leader.id, memberIds);
-    }, delay);
+      autoActFor(room, leader);
+    }, randomDelay());
   } else if (room.phase === 'voting') {
     const round = room.voteRound;
     room.players.filter((p) => room.votes[p.id] === undefined).forEach((p) => {
-      const isConnectedHuman = !p.isBot && p.connected;
-      if (isConnectedHuman && !room.afkTimeoutEnabled) return;
-      const delay = isConnectedHuman ? AFK_TIMEOUT_MS : randomDelay();
+      if (!p.isBot && p.connected) return;
       setTimeout(() => {
         if (!rooms.has(room.code)) return;
         if (room.phase !== 'voting' || room.voteRound !== round) return;
         if (room.votes[p.id] !== undefined) return;
-        // Abwesende/untätige Menschen bekommen einen sicheren Standardwert
-        // (Zustimmung) statt der rollenbasierten Bot-Logik - der Server soll
-        // niemanden im Namen einer echten Person verdächtig wirken lassen.
-        const approve = p.isBot ? decideBotVote(room, p) : true;
-        handleVote(room, p.id, approve);
-      }, delay);
+        if (p.isBot) handleVote(room, p.id, decideBotVote(room, p));
+        else autoActFor(room, p);
+      }, randomDelay());
     });
   } else if (room.phase === 'mission') {
     const round = room.missionRound;
@@ -773,18 +808,14 @@ function scheduleBotTurnIfNeeded(room) {
       .map((id) => findPlayer(room, id))
       .filter((p) => p && room.missionCards[p.id] === undefined)
       .forEach((p) => {
-        const isConnectedHuman = !p.isBot && p.connected;
-        if (isConnectedHuman && !room.afkTimeoutEnabled) return;
-        const delay = isConnectedHuman ? AFK_TIMEOUT_MS : randomDelay();
+        if (!p.isBot && p.connected) return;
         setTimeout(() => {
           if (!rooms.has(room.code)) return;
           if (room.phase !== 'mission' || room.missionRound !== round) return;
           if (room.missionCards[p.id] !== undefined) return;
-          // Abwesende/untätige Menschen spielen automatisch IMMER "Erfolg" -
-          // der Server darf niemals in ihrem Namen sabotieren.
-          const card = p.isBot ? decideBotCard(room, p) : 'success';
-          handlePlayCard(room, p.id, card);
-        }, delay);
+          if (p.isBot) handlePlayCard(room, p.id, decideBotCard(room, p));
+          else autoActFor(room, p);
+        }, randomDelay());
       });
   } else if (room.phase === 'commanderGuess') {
     room.players.filter((p) => p.isBot && room.roles[p.id] === 'spy').forEach((bot) => {
@@ -1005,6 +1036,7 @@ io.on('connection', (socket) => {
       if (existing) {
         existing.socketId = socket.id;
         existing.connected = true;
+        if (room.hostId === existing.id && room.hostTimer) { clearTimeout(room.hostTimer); room.hostTimer = null; }
         socket.join(room.code);
         socket.data.roomCode = room.code;
         socket.data.playerId = existing.id;
@@ -1056,13 +1088,19 @@ io.on('connection', (socket) => {
       room.players = room.players.filter((p) => p.id !== player.id);
       if (room.hostId === player.id) {
         room.hostId = room.players.length ? room.players[0].id : null;
+        ensureHost(room);
       }
       log(room, `${player.name} hat den Raum verlassen.`);
     } else {
       // Spiel läuft schon: wie ein Verbindungsabbruch behandeln, der Sitzplatz
       // bleibt erhalten (Team-/Missionslogik referenziert sonst fehlende Spieler-IDs).
       player.connected = false;
+      // socketId leeren: verhindert, dass diese Person (deren Socket ja noch
+      // verbunden ist, nur den Raum verlassen hat) über private Kanäle wie
+      // "plotHand"/"yourRole" noch weitere Daten aus dem verlassenen Spiel bekommt.
+      player.socketId = null;
       log(room, `${player.name} hat das Spiel verlassen.`);
+      ensureHost(room);
     }
 
     socket.leave(room.code);
@@ -1136,16 +1174,6 @@ io.on('connection', (socket) => {
     if (!room || room.phase !== 'lobby') return;
     if (socket.data.playerId !== room.hostId) return;
     room.commanderEnabled = !!enabled;
-    touchRoom(room);
-    broadcastState(room);
-  });
-
-  // AFK-Timeout in der Lobby an-/ausschalten (nur Host, nur vor Spielstart)
-  socket.on('setAfkTimeoutEnabled', ({ enabled }) => {
-    const room = rooms.get(socket.data.roomCode);
-    if (!room || room.phase !== 'lobby') return;
-    if (socket.data.playerId !== room.hostId) return;
-    room.afkTimeoutEnabled = !!enabled;
     touchRoom(room);
     broadcastState(room);
   });
@@ -1309,6 +1337,20 @@ io.on('connection', (socket) => {
     broadcastState(room);
   });
 
+  socket.on('skipTurn', () => {
+    const room = rooms.get(socket.data.roomCode);
+    if (!room) return;
+    const info = waitInfo(room);
+    if (!info || info.elapsedMs < SKIP_MIN_WAIT_MS) return;
+    const isHost = socket.data.playerId === room.hostId;
+    if (!isHost && !info.ids.includes(room.hostId)) return;
+    if (info.ids.includes(socket.data.playerId)) return;
+    info.ids.slice().forEach((id) => {
+      const p = findPlayer(room, id);
+      if (p) { log(room, `${p.name} wurde übersprungen.`); autoActFor(room, p); }
+    });
+  });
+
   socket.on('disconnect', () => {
     const room = rooms.get(socket.data.roomCode);
     if (!room) return;
@@ -1316,6 +1358,7 @@ io.on('connection', (socket) => {
     if (!player) return;
     player.connected = false;
     log(room, `${player.name} hat die Verbindung verloren.`);
+    if (room.hostId === player.id) scheduleHostHandover(room);
     touchRoom(room);
     broadcastState(room);
   });

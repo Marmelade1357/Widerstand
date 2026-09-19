@@ -6,6 +6,11 @@
 <title>Der Widerstand – Online</title>
 <link rel="icon" type="image/png" href="favicon.png" />
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<meta name="theme-color" content="#0f1117" />
+<link rel="manifest" href="manifest.webmanifest" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="Widerstand" />
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -50,6 +55,7 @@
       <div>
         <div class="eyebrow">Raum-Code – an Freunde weitergeben</div>
         <div id="lobby-code" class="room-code">----</div>
+        <button id="btn-share-link" class="btn secondary small" type="button">🔗 Einladungslink teilen</button>
       </div>
       <button id="btn-leave-lobby" class="btn ghost small">Verlassen</button>
     </div>
@@ -76,14 +82,9 @@
     </label>
     <p id="commander-toggle-note" class="hint hidden"></p>
 
-    <label id="afk-toggle-row" class="plot-toggle-row">
-      <input type="checkbox" id="afk-toggle-checkbox" checked />
-      <span>⏱️ Nach 60s Inaktivität automatisch weitermachen (Team-Vorschlag/Abstimmung/Mission)</span>
-    </label>
-    <p id="afk-toggle-note" class="hint hidden"></p>
-
     <p id="lobby-status" class="hint"></p>
     <button id="btn-start" class="btn primary hidden">Spiel starten</button>
+    <button id="btn-show-rules-lobby" class="btn ghost small rules-btn" type="button">📜 Regeln ansehen</button>
   </div>
 </section>
 
@@ -112,6 +113,7 @@
         <span id="plot-hand-badge" class="plot-hand-badge hidden" title="Ungenutzte Plottkarte(n)"></span>
       </div>
       <div class="game-header-right">
+        <button id="btn-show-rules" class="btn ghost small" type="button">📜 Regeln</button>
         <button id="btn-mute" class="btn ghost small" title="Ton stummschalten">🔊</button>
         <button id="btn-leave-game" class="btn ghost small">Verlassen</button>
       </div>
@@ -170,6 +172,30 @@
   <div class="modal-content mission-reveal-modal-content">
     <div id="mission-reveal-cards" class="mission-card-row"></div>
     <p id="mission-reveal-text" class="mission-reveal-text"></p>
+  </div>
+</div>
+
+<!-- ============ REGELN MODAL ============ -->
+<div id="rules-modal" class="modal hidden">
+  <div class="modal-content rules-modal-content">
+    <button id="btn-close-rules-modal" class="btn ghost small modal-close">✕</button>
+    <h2>📜 Regeln – Der Widerstand</h2>
+    <div class="rules-text">
+      <h3>Ziel</h3>
+      <p>Es gibt zwei Teams: den <b>Widerstand</b> und die geheimen <b>Spione</b> (5–10 Personen). Wer zuerst drei Missionen für sich entscheidet, gewinnt. Die Spione kennen einander, der Widerstand kennt nur seine eigene Rolle.</p>
+      <h3>Rollen sehen</h3>
+      <p>Zu Beginn siehst du deine Rolle geheim. Spione sehen ihre Mitspione. Mit „Meine Rolle“ kannst du sie später erneut ansehen.</p>
+      <h3>Eine Runde (Mission)</h3>
+      <p>1. Die <b>Team-Chef-Person</b> schlägt ein Team in der geforderten Größe vor (wechselt jede Runde).<br>2. <b>Alle</b> stimmen offen ab: Zustimmung oder Ablehnung. Bei Mehrheit für „Ja“ geht das Team auf Mission, sonst wird die Team-Chef-Rolle weitergegeben.<br>3. Team-Mitglieder spielen geheim eine Karte: <b>Erfolg</b> oder <b>Fehlschlag</b> (Widerstand muss Erfolg spielen, Spione dürfen sabotieren).<br>4. Die Karten werden gemischt aufgedeckt. Schon eine Fehlschlag-Karte lässt die Mission scheitern – nur die 4. Mission braucht bei 7+ Personen zwei.</p>
+      <h3>Abgelehnte Teams</h3>
+      <p>Werden fünf Teamvorschläge in Folge abgelehnt, gewinnen die Spione sofort.</p>
+      <h3>Variante: Kommandant</h3>
+      <p>Ist sie aktiv, kennt ein Widerstandsmitglied (der Kommandant) die Spione. Gewinnt der Widerstand drei Missionen, dürfen die Spione einmal raten, wer der Kommandant ist. Raten sie richtig, gewinnen sie doch noch.</p>
+      <h3>Plottkarten</h3>
+      <p>Nach einer Mission verteilt die Team-Chef-Person offen Plottkarten. <b>Sofort wirksam:</b> Abhörmaßnahme (eine Rolle heimlich ansehen), Vertrauen bilden (Team-Chef zeigt seine Rolle), Sich offenbaren (eigene Rolle zeigen). <b>Dauerhaft:</b> Meinungsmacher (stimmt bei Abstimmungen immer zuerst offen ab). <b>Einmal einsetzbar:</b> Misstrauen (kippt ein angenommenes Team), Überwachung (letzte Missionskarte eines Mitglieds ansehen), Führungsstärke (Team-Chef-Rolle übernehmen), Im Fokus (Missionskarte offen spielen lassen), Verantwortung übernehmen (eine Plottkarte stehlen). Die Host-Person kann Plottkarten in der Lobby an- oder abschalten.</p>
+      <h3>Wartezeit</h3>
+      <p>Niemand wird automatisch bewegt. Wenn jemand lange nicht reagiert, kann die Host-Person nach einer Weile „Überspringen“ wählen (Zustimmung bzw. „Erfolg“, zufälliges Team).</p>
+    </div>
   </div>
 </div>
 
